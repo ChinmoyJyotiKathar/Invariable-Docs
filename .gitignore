@@ -1,0 +1,66 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local Vector DB & Storage
+qdrant_storage/
+chroma_db/
+lancedb_data/
+*.sqlite3
+*.db
+
+# Data & Document Ingestion (ignore large/private files except gitkeep)
+data/*
+!data/.gitkeep
+
+# Evaluation & Tracing Logs
+eval_results/*
+!eval_results/.gitkeep
+*.log
+
+# Test & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
