@@ -5,9 +5,11 @@ Extracts raw character sequences, page numbers, and table layouts from PDF files
 using `PyMuPDF (fitz)` as primary engine and `pdfplumber` as structured table fallback.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ class DocumentParser:
     def __init__(self, extract_tables: bool = True):
         self.extract_tables = extract_tables
 
-    def parse_pdf(self, file_path: Path | str) -> List[ParsedPage]:
+    def parse_pdf(self, file_path: Union[Path, str]) -> List[ParsedPage]:
         """
         Parse a PDF file into a sequence of ParsedPage objects containing text and tables.
         
