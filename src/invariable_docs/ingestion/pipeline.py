@@ -5,9 +5,11 @@ Connects document parsing, structural cleaning, chunking, dense embedding,
 and sparse indexing into an automated end-to-end vector database ingestion workflow.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from invariable_docs.ingestion.parser import DocumentParser
 from invariable_docs.ingestion.cleaner import DocumentCleaner
 from invariable_docs.ingestion.chunkers import BaseChunker, RecursiveCharacterChunker
@@ -39,7 +41,7 @@ class IngestionPipeline:
 
     def ingest_file(
         self,
-        file_path: Path | str,
+        file_path: Union[Path, str],
         doc_id: Optional[str] = None,
         default_date: Optional[str] = None,
         batch_size: int = 64,
@@ -94,7 +96,7 @@ class IngestionPipeline:
 
     def ingest_directory(
         self,
-        directory_path: Path | str,
+        directory_path: Union[Path, str],
         file_extensions: Optional[List[str]] = None,
         batch_size: int = 64,
     ) -> int:

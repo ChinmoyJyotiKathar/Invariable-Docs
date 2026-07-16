@@ -5,9 +5,11 @@ Normalizes raw OCR/PDF text artifacts, cleans control characters,
 and detects structural hierarchy (section headers, dates) for metadata tagging.
 """
 
+from __future__ import annotations
+
 import logging
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 from invariable_docs.ingestion.parser import ParsedPage
 

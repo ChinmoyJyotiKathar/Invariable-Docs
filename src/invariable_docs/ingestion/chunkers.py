@@ -5,10 +5,12 @@ Implements both baseline `RecursiveCharacterChunker` and advanced `SemanticChunk
 to transform cleaned document pages into bounded, semantically coherent `RetrievedChunk` payloads.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 import numpy as np
 from invariable_docs.ingestion.cleaner import CleanedPage
 from invariable_docs.providers.base import BaseEmbeddingProvider, ChunkMetadata, RetrievedChunk
