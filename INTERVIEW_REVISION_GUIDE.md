@@ -8,36 +8,28 @@
 ### The Core Architectural Decision
 In enterprise AI engineering, direct coupling to specific model APIs or database vendors (`e.g., hard-coding OpenAI SDK calls or specific Qdrant drivers inside core application workflows`) creates vendor lock-in and impedes offline development. Modern system architectures enforce strict separation of concerns via abstract provider protocols (`Strategy Pattern`).
 
-```mermaid
-graph LR
-    subgraph Application & Workflows
-        Ingest[Ingestion Pipeline]
-        Search[Hybrid Retrieval Engine]
-        Gen[Generation & Guardrails]
-    end
-
-    subgraph Provider Interfaces Protocol / ABC
-        I_Embed[[BaseEmbeddingProvider]]
-        I_Vector[[BaseVectorStoreProvider]]
-        I_LLM[[BaseLLMProvider]]
-    end
-
-    subgraph Local Runtime Offline / M-Series Silicon
-        L_Embed[BGE-Large on Apple MPS]
-        L_Vector[Qdrant Embedded Engine]
-        L_LLM[Ollama Llama 3.1 8B]
-    end
-
-    subgraph Enterprise Cloud SaaS
-        C_Embed[OpenAI text-embedding-3]
-        C_Vector[Pinecone Serverless Index]
-        C_LLM[OpenAI GPT-4o / Claude 3.5]
-    end
-
-    Ingest & Search & Gen --> I_Embed & I_Vector & I_LLM
-    I_Embed -.- L_Embed & C_Embed
-    I_Vector -.- L_Vector & C_Vector
-    I_LLM -.- L_LLM & C_LLM
+```text
++-----------------------------------------------------------------------------------+
+|                        CORE APPLICATION & PIPELINE WORKFLOWS                      |
+|  [ Ingestion Pipeline ] <----> [ Hybrid Retrieval Engine ] <----> [ Generation ]  |
++-----------------------------------------------------------------------------------+
+                                          │
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                 ABSTRACT PROVIDER PROTOCOLS (Strategy Interface)                 |
+|  [ BaseEmbeddingProvider ]  |  [ BaseVectorStoreProvider ]  |  [ BaseLLMProvider ]|
++-----------------------------------------------------------------------------------+
+                 ▲                                                   ▲
+                 │ (Injected via .env at Initialization)             │
+                 ├───────────────────────────────────────────────────┤
+                 │                                                   │
+                 ▼                                                   ▼
++---------------------------------+                 +---------------------------------+
+|     V1 LOCAL RUNTIME (M5 Mac)   |                 |    ENTERPRISE CLOUD SAAS        |
+|  • BGE-Large (Apple MPS GPU)    |                 |  • OpenAI text-embedding-3      |
+|  • Qdrant Local Embedded Engine |                 |  • Pinecone Serverless Index    |
+|  • Ollama (Llama 3.1 8B Metal)  |                 |  • OpenAI GPT-4o / Claude 3.5   |
++---------------------------------+                 +---------------------------------+
 ```
 
 * **Engineering Impact:** All pipelines interact exclusively with `BaseEmbeddingProvider`, `BaseVectorStoreProvider`, and `BaseLLMProvider`. Migrating a deployment from a local Apple Silicon development environment (`Ollama + Local Qdrant + BGE-Large via MPS`) to a cloud-native production deployment (`OpenAI + Pinecone Serverless`) requires zero modifications to business logic or pipeline code; the underlying implementation is injected dynamically at initialization via environment settings.
@@ -48,14 +40,41 @@ graph LR
 
 The ingestion pipeline transforms raw unstructured documents into structured, multi-modal vector representations optimized for both semantic and exact-match retrieval.
 
-```mermaid
-flowchart LR
-    A[Raw Document Document / PDF] -->|PyMuPDF / pdfplumber| B[Raw Text + Page Coordinates]
-    B -->|Cleaning & Metadata Extraction| C[Normalized Text + Structural Metadata]
-    C -->|Recursive Character Chunking| D[Text Passages ~512 Tokens]
-    D -->|Embedding Provider| E[1024-Dimension Dense Vectors]
-    D -->|BM25 Tokenization| F[Sparse Keyword Index]
-    E & F & D -->|VectorStore Provider| G[(Vector Database Index)]
+```text
++-----------------------------------------------------------------------------------+
+|                                 1. DOCUMENT INGESTION                             |
+|  Raw PDF / Filings (apple_10k_2023.pdf) -> PyMuPDF / pdfplumber Extraction        |
++-----------------------------------------------------------------------------------+
+                                          │
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                                 2. STRUCTURAL NORMALIZATION                       |
+|  Clean Whitespace & Attach Metadata (doc_id, page_no=42, section_header)         |
++-----------------------------------------------------------------------------------+
+                                          │
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                                 3. RECURSIVE CHUNKING                             |
+|  Split into Bounded Text Passages (~512 Tokens, 64 Token Overlap)                 |
++-----------------------------------------------------------------------------------+
+                                          │
+                    ┌─────────────────────┴─────────────────────┐
+                    ▼                                           ▼
++---------------------------------------+   +---------------------------------------+
+|        4a. DENSE EMBEDDINGS           |   |       4b. SPARSE TOKENIZATION         |
+|  BaseEmbeddingProvider (BGE-Large)    |   |  rank_bm25 Inverted Keyword Index     |
+|  [0.12, -0.04, 0.88, ...] (1024-dim)  |   |  { "R&D": 3.2, "$29.9": 4.8 }         |
++---------------------------------------+   +---------------------------------------+
+                    │                                           │
+                    └─────────────────────┬─────────────────────┘
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                            5. DUAL-INDEX VECTOR STORAGE                           |
+|  BaseVectorStoreProvider (Qdrant Point Payload)                                   |
+|  ├── dense_vector : [0.12, -0.04, 0.88, ...]                                      |
+|  ├── sparse_vector: { "indices": [104, 882], "values": [3.2, 4.8] }               |
+|  └── payload      : { text: "Total R&D...", metadata: { page_no: 42 } }           |
++-----------------------------------------------------------------------------------+
 ```
 
 ### Stage-by-Stage Data Transformation
@@ -121,18 +140,33 @@ In complex enterprise domains (`Financial Filings`, `Legal Contracts`, `Technica
 
 In two-stage RAG architectures (`Stage 1: Top-K Hybrid Retrieval` $\rightarrow$ `Stage 2: Top-N Cross-Encoder Re-Ranking`), diagnosing system failures requires distinguishing between retrieval misses (`Stage 1`) and re-ranking misclassifications (`Stage 2`).
 
-```mermaid
-sequenceDiagram
-    participant Index as Vector Database (100,000 Chunks)
-    participant Hybrid as Stage 1: Hybrid Retrieval (top_k = 15)
-    participant Rerank as Stage 2: Cross-Encoder Re-Ranker (top_n = 4)
-    participant LLM as LLM Context Window
-    
-    Index->>Hybrid: Execute Cosine + BM25 Search
-    Note over Hybrid: CONTEXT RECALL checks:<br/>Did the true ground-truth passages enter the Top 15 candidates?
-    Hybrid->>Rerank: Pass 15 Candidate Passages
-    Note over Rerank: CONTEXT PRECISION checks:<br/>Did the Cross-Encoder sort the true passages into positions #1-#4?
-    Rerank->>LLM: Inject ONLY Top 4 Passages into System Prompt
+```text
++-----------------------------------------------------------------------------------+
+|               GLOBAL VECTOR DATABASE INDEX (100,000+ Document Chunks)             |
++-----------------------------------------------------------------------------------+
+                                          │
+                                          │ Stage 1: Cosine + BM25 Search
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                  STAGE 1: HYBRID RETRIEVAL CANDIDATE POOL (Top 15)                |
+|  [!] RAGAS Metric: CONTEXT RECALL                                                 |
+|      Question: "Did the true ground-truth passages enter these Top 15 candidates?" |
++-----------------------------------------------------------------------------------+
+                                          │
+                                          │ Stage 2: Cross-Encoder Evaluation
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                 STAGE 2: RE-RANKED & FILTERED PASSAGES (Top 4)                    |
+|  [!] RAGAS Metric: CONTEXT PRECISION                                              |
+|      Question: "Did the Cross-Encoder sort the true passages into positions #1-#4?"|
++-----------------------------------------------------------------------------------+
+                                          │
+                                          │ Injected into System Prompt `<context>`
+                                          ▼
++-----------------------------------------------------------------------------------+
+|                         STAGE 3: LLM CONTEXT WINDOW                               |
+|  [ BaseLLMProvider ] -> Generates Grounded Answer with Exact Citations            |
++-----------------------------------------------------------------------------------+
 ```
 
 ### Comparative Metric Breakdown (`RAGAS Framework`)
