@@ -1,37 +1,37 @@
-# 🎯 AI Engineering Interview Revision Guide: Invariable Docs
-*Your high-signal, real-world revision companion for RAG, Hybrid Search, Embeddings, Re-Rankers, and Evaluation.*
+# AI Engineering Interview & Architecture Reference Guide: Invariable Docs
+*A self-contained technical reference on enterprise Retrieval-Augmented Generation (RAG), Hybrid Retrieval, Cross-Encoder Re-Ranking, and System Evaluation.*
 
 ---
 
-## 1. Architectural Philosophy: Why "Plug-and-Play"?
+## 1. Architectural Philosophy: Provider Abstraction (`Strategy Pattern`)
 
-### The Core Interview Concept
-In system design interviews, never propose a hard-coded vendor integration (`e.g., calling OpenAI directly inside your business logic`). Modern AI engineering requires **Strict Separation of Concerns** via **Abstract Protocols (`Strategy Pattern`)**.
+### The Core Architectural Decision
+In enterprise AI engineering, direct coupling to specific model APIs or database vendors (`e.g., hard-coding OpenAI SDK calls or specific Qdrant drivers inside core application workflows`) creates vendor lock-in and impedes offline development. Modern system architectures enforce strict separation of concerns via abstract provider protocols (`Strategy Pattern`).
 
 ```mermaid
 graph LR
-    subgraph Core Business Logic
+    subgraph Application & Workflows
         Ingest[Ingestion Pipeline]
-        Search[Hybrid Retrieval]
-        Gen[Generation Engine]
+        Search[Hybrid Retrieval Engine]
+        Gen[Generation & Guardrails]
     end
 
-    subgraph Abstract Protocol Interfaces
+    subgraph Provider Interfaces Protocol / ABC
         I_Embed[[BaseEmbeddingProvider]]
         I_Vector[[BaseVectorStoreProvider]]
         I_LLM[[BaseLLMProvider]]
     end
 
-    subgraph V1 Local Mac M5 16GB
+    subgraph Local Runtime Offline / M-Series Silicon
         L_Embed[BGE-Large on Apple MPS]
-        L_Vector[Qdrant Local Storage]
+        L_Vector[Qdrant Embedded Engine]
         L_LLM[Ollama Llama 3.1 8B]
     end
 
-    subgraph Cloud Production SaaS
+    subgraph Enterprise Cloud SaaS
         C_Embed[OpenAI text-embedding-3]
-        C_Vector[Pinecone Serverless]
-        C_LLM[GPT-4o / Claude 3.5]
+        C_Vector[Pinecone Serverless Index]
+        C_LLM[OpenAI GPT-4o / Claude 3.5]
     end
 
     Ingest & Search & Gen --> I_Embed & I_Vector & I_LLM
@@ -40,144 +40,130 @@ graph LR
     I_LLM -.- L_LLM & C_LLM
 ```
 
-* **Why it matters:** If you run `Invariable Docs` on your local **MacBook Air M5 (16GB RAM)** using `Ollama` + `BGE-Large (MPS)` + `Qdrant Local`, and tomorrow your CTO says *"We need to deploy to enterprise AWS with OpenAI and Pinecone,"* **you do not touch a single line of your pipeline code.** You change three lines in `.env`, and the `ProviderFactory` swaps the engine automatically.
+* **Engineering Impact:** All pipelines interact exclusively with `BaseEmbeddingProvider`, `BaseVectorStoreProvider`, and `BaseLLMProvider`. Migrating a deployment from a local Apple Silicon development environment (`Ollama + Local Qdrant + BGE-Large via MPS`) to a cloud-native production deployment (`OpenAI + Pinecone Serverless`) requires zero modifications to business logic or pipeline code; the underlying implementation is injected dynamically at initialization via environment settings.
 
 ---
 
-## 2. The Ingestion Flow Demystified (The "3 D's" & Node Walkthrough)
+## 2. Ingestion & Indexing Pipeline Architecture
 
-### The Mermaid Flowchart
+The ingestion pipeline transforms raw unstructured documents into structured, multi-modal vector representations optimized for both semantic and exact-match retrieval.
+
 ```mermaid
 flowchart LR
-    A[Raw PDF] -->|PyMuPDF| B[Text + Page Numbers]
-    B -->|Cleaner| C[Cleaned Text + Header Metadata]
-    C -->|Recursive / Semantic Splitter| D[Chunks of ~512 tokens]
-    D -->|Embedder Provider| E[1024-dim Dense Vectors]
-    D -->|BM25 Tokenizer| F[Sparse Keyword Index]
-    E & F -->|VectorStore Provider| G[(Indexed Database)]
+    A[Raw Document Document / PDF] -->|PyMuPDF / pdfplumber| B[Raw Text + Page Coordinates]
+    B -->|Cleaning & Metadata Extraction| C[Normalized Text + Structural Metadata]
+    C -->|Recursive Character Chunking| D[Text Passages ~512 Tokens]
+    D -->|Embedding Provider| E[1024-Dimension Dense Vectors]
+    D -->|BM25 Tokenization| F[Sparse Keyword Index]
+    E & F & D -->|VectorStore Provider| G[(Vector Database Index)]
 ```
 
-> [!NOTE]
-> **Why does `D` appear twice (`D --> E` and `D --> F`)?**  
-> In Mermaid syntax, `D` (`Chunks of ~512 tokens`) is a single node variable. Because we send every chunk down **two parallel pipelines simultaneously** (one for semantic dense vectors (`E`), one for exact keyword BM25 indexing (`F`)), the node `D` branches in two directions at the same time!
+### Stage-by-Stage Data Transformation
 
----
+To illustrate the exact data mutations across the pipeline, consider an enterprise financial document (`apple_10k_2023.pdf`, Page 42):
 
-### Real-World Walkthrough (`apple_10k_2023.pdf`, Page 42)
-
-Imagine we have this exact paragraph from Apple's annual filing:
 > *"Total R&D expenses in fiscal year 2023 were $29.9 billion, compared to $26.3 billion in 2022. This increase was primarily driven by headcount growth and silicon investments."*
 
-Here is what happens to that exact text at every single node:
-
-| Node | What It Represents | Exact Data State in Memory |
+| Stage | Processing Engine | Output State & Structure |
 | :--- | :--- | :--- |
-| **`A [Raw PDF]`** | Binary document file | `apple_10k_2023.pdf` (Raw PDF bytes on disk) |
-| **`B [Text + Page Numbers]`** | Output of `PyMuPDF` extraction | Raw text string $+$ `page_no = 42` |
-| **`C [Cleaned Text + Header]`** | Normalized text $+$ metadata | `{ "text": "Total R&D...", "doc_id": "apple_10k_2023.pdf", "page_no": 42, "section": "Item 7. Financial Discussion" }` |
-| **`D [Chunks of ~512 tokens]`** | Split paragraph (`Chunk #42`) | **Pure English string:** *"Total R&D expenses in fiscal year 2023 were $29.9 billion..."* |
-| **`E [Dense Vector]`** | Semantic embedding (`BGE-Large`) | `[0.12, -0.04, 0.88, 0.01, -0.32, ...]` *(1,024 floating-point numbers)* |
-| **`F [Sparse Keyword Index]`** | BM25 word frequencies | `{ "R&D": 3.2, "expenses": 1.1, "2023": 2.4, "$29.9": 4.8, "billion": 0.9 }` |
-| **`G [(Indexed Database)]`** | Qdrant / Pinecone point record | **Stored together:** (`E` Dense Vector $+$ `F` Sparse Keywords $+$ `D` Original English Text & Metadata) |
+| **Stage 1: Document Parsing** | `PyMuPDF` / `pdfplumber` | Extracts raw character sequences alongside document boundaries (`page_no = 42`). Preserves table layouts when present. |
+| **Stage 2: Normalization & Metadata** | Structural Cleaner | Normalizes whitespace and attaches domain metadata (`doc_id="apple_10k_2023.pdf"`, `page_no=42`, `section_header="Item 7. Management's Discussion"`). |
+| **Stage 3: Chunking** | Recursive Character Splitter | Splits normalized text at semantic boundaries (`paragraphs`, `sentences`) into bounded tokens (`chunk_size = 512`, `overlap = 64`). Outputs discrete passage strings. |
+| **Stage 4a: Dense Embedding** | `BaseEmbeddingProvider` (`BAAI/bge-large-en-v1.5`) | Projects passage strings into a continuous semantic vector space: `[0.12, -0.04, 0.88, 0.01, -0.32, ...]` ($1,024 \text{ dimensions}$). |
+| **Stage 4b: Sparse Indexing** | `rank_bm25` Tokenizer | Generates a sparse keyword-frequency map weighted by inverse document frequency: `{ "R&D": 3.2, "expenses": 1.1, "2023": 2.4, "$29.9": 4.8 }`. |
+| **Stage 5: Storage Injection** | `BaseVectorStoreProvider` (`Qdrant`) | Persists all three layers (`Dense Vector`, `Sparse Vector`, and `Original Text + Metadata Payload`) as a unified point in the index. |
 
 ---
 
-## 3. Anatomy of a Vector Database Record (`Why D is stored with E & F`)
+## 3. Anatomy of a Vector Database Record (`Payload Separation`)
 
-### The Interview Gotcha Question
-> *"If we convert English text (`D`) into a 1024-dimensional dense vector (`E`) and search using cosine distance... why do we still need to store the original English text (`D`) in the database?"*
+### Technical Requirement
+A common design oversight is storing only numeric vector representations ($1,024 \text{ float arrays}$) in the database index. While high-dimensional vectors allow distance-based similarity search (`Cosine`, `Euclidean`), **vectors cannot be reversed back into natural language by a Language Model during generation.** 
 
-### The Answer
-If you only stored the vector numbers `[0.12, -0.04, 0.88, ...]`, when Qdrant finds the top matching record (#42), **you would have nothing to give the LLM!** An LLM (`Llama 3.1` or `GPT-4o`) **cannot read or reconstruct English sentences from floating-point mathematical arrays.**
-
-Therefore, every modern vector database requires each stored record (`Point`) to contain three mandatory components:
+To enable end-to-end RAG, vector databases (`Qdrant`, `Pinecone`, `Chroma`) structure every stored point (`Record`) into three decoupled components:
 
 ```json
 {
   "point_id": "chunk_0042",
   
-  "dense_vector": [0.12, -0.04, 0.88, 0.01, -0.32, ...], 
+  "dense_vector": [0.12, -0.04, 0.88, 0.01, -0.32, 0.19], 
   "sparse_vector": { "indices": [104, 882], "values": [3.2, 4.8] },
   
   "payload": {
-    "text": "Total R&D expenses in fiscal year 2023 were $29.9 billion...",
+    "text": "Total R&D expenses in fiscal year 2023 were $29.9 billion, compared to $26.3 billion in 2022...",
     "metadata": {
       "doc_id": "apple_10k_2023.pdf",
       "page_no": 42,
-      "section_header": "Item 7. Financial Discussion"
+      "section_header": "Item 7. Management's Discussion"
     }
   }
 }
 ```
 
-* **The Numbers (`dense_vector` + `sparse_vector`)** are used **only by the database engine internally** during the search step to calculate mathematical similarity.
-* **The Payload (`payload.text` + `payload.metadata`)** is what the database **returns to your Python application** after finding the match, so you can inject the clean English text into the `<context>` XML tags for the LLM and show exact citations (`[Source: apple_10k_2023.pdf, p. 42]`) to the user!
+* **Index Layer (`dense_vector`, `sparse_vector`)**: Evaluated **exclusively inside the vector search engine** using mathematical distance metrics during queries. The LLM never reads these numeric arrays.
+* **Payload Layer (`payload.text`, `payload.metadata`)**: Retrieved by the backend application *after* vector scoring concludes. The `payload.text` string is injected directly into the prompt context window (`<context>...</context>`), and `payload.metadata` is utilized for strict source attribution (`[Source: apple_10k_2023.pdf, p. 42]`).
 
 ---
 
-## 4. Why Hybrid Search? (Dense vs. Sparse + RRF)
+## 4. Hybrid Retrieval & Reciprocal Rank Fusion (`RRF`)
 
-Why not just use Dense Embeddings alone? Why do we combine Cosine Similarity $+$ BM25 Keywords using **Reciprocal Rank Fusion (RRF)**?
+In complex enterprise domains (`Financial Filings`, `Legal Contracts`, `Technical Documentation`), neither dense semantic retrieval nor sparse keyword matching alone achieves production-grade recall.
 
-| Search Type | How It Works | Superpower | Fatal Weakness |
+| Search Methodology | Underlying Mechanism | Primary Strengths | Technical Limitations |
 | :--- | :--- | :--- | :--- |
-| **Dense Search (Embeddings)** | Cosine angle between 1024-dim vectors | **Semantic Meaning:** Finds *"revenue expansion"* when query asks for *"sales growth"* | Fails on **Exact Matches:** Misses specific entity names, acronyms (`"EBITDA-CAPEX"`), and precise dollar numbers (`"$29.9 billion"`). |
-| **Sparse Search (BM25)** | Term-frequency / length normalization | **Exact Precision:** 100% instant match when searching for specific codes (`"Section 14(a)"`) or numbers (`"$29.9B"`). | Fails on **Synonyms:** If query says *"automobile"* and document says *"car"*, BM25 scores it zero. |
-| **Hybrid Search (RRF)** | $RRF\_Score = \sum \frac{1}{60 + rank}$ | **Best of Both Worlds:** Combines dense semantic understanding with exact sparse precision. Outperforms either individual method by 5–15%. | Requires running two search queries per prompt and tuning weights ($W_{dense}=0.7, W_{sparse}=0.3$). |
+| **Dense Retrieval (Embeddings)** | Cosine similarity across normalized $d$-dimensional latent vectors. | **Semantic Generalization:** Matches conceptual intent even with varied phrasing (`"revenue expansion"` $\rightarrow$ `"sales growth"`). | **Exact-Match Blindness:** Frequently misses exact entity codes (`"Section 14(a)"`), rare acronyms, or precise numeric figures (`"$29.9 billion"`). |
+| **Sparse Retrieval (BM25)** | Term frequency saturation ($k_1$) and length-normalized ($b$) word overlap. | **Exact-Match Precision:** Delivers near-perfect recall when queries contain specific identifiers, codes, or exact figures. | **Vocabulary Mismatch:** Fails when queries use synonyms or abstract terminology (`"automobile"` $\rightarrow$ `"car"` yields zero similarity). |
+| **Hybrid Retrieval (`RRF`)** | Reciprocal Rank Fusion: <br> $Score = \sum \frac{1}{k + \text{rank}_i} \times W_i$ | **Full Coverage:** Combines dense conceptual reach with exact keyword accuracy ($W_{\text{dense}}=0.7, W_{\text{sparse}}=0.3, k=60$). | Requires maintaining two parallel index structures and introduces slight latency during candidate merging. |
 
 ---
 
-## 5. Precision vs. Recall (The "Golden Fish" Analogy)
+## 5. Evaluation & Diagnostics: Context Recall vs. Context Precision
 
-In two-stage RAG retrieval (`Stage 1: Top 15 Hybrid Search` $\rightarrow$ `Stage 2: Top 4 Cross-Encoder Re-Ranker`), **Context Recall** and **Context Precision** measure two completely different failure modes.
-
-Think of your PDF as a giant lake, and there are **3 Golden Fish** inside it (the exact 3 chunks that answer the user's question).
+In two-stage RAG architectures (`Stage 1: Top-K Hybrid Retrieval` $\rightarrow$ `Stage 2: Top-N Cross-Encoder Re-Ranking`), diagnosing system failures requires distinguishing between retrieval misses (`Stage 1`) and re-ranking misclassifications (`Stage 2`).
 
 ```mermaid
 sequenceDiagram
-    participant Lake as PDF Corpus (1,000 pages)
-    participant Net as Stage 1: Hybrid Search (top_k = 15)
-    participant Sorter as Stage 2: Cross-Encoder Re-Ranker (top_n = 4)
+    participant Index as Vector Database (100,000 Chunks)
+    participant Hybrid as Stage 1: Hybrid Retrieval (top_k = 15)
+    participant Rerank as Stage 2: Cross-Encoder Re-Ranker (top_n = 4)
     participant LLM as LLM Context Window
     
-    Lake->>Net: Throw Net into Lake (Pull 15 chunks)
-    Note over Net: CONTEXT RECALL checks:<br/>Did our net catch all 3 Golden Fish?
-    Net->>Sorter: Pass 15 candidate chunks to Cross-Encoder
-    Note over Sorter: CONTEXT PRECISION checks:<br/>Did our sorter put the 3 Golden Fish at #1, #2, #3?
-    Sorter->>LLM: Send ONLY Top 4 chunks (#1 through #4)
+    Index->>Hybrid: Execute Cosine + BM25 Search
+    Note over Hybrid: CONTEXT RECALL checks:<br/>Did the true ground-truth passages enter the Top 15 candidates?
+    Hybrid->>Rerank: Pass 15 Candidate Passages
+    Note over Rerank: CONTEXT PRECISION checks:<br/>Did the Cross-Encoder sort the true passages into positions #1-#4?
+    Rerank->>LLM: Inject ONLY Top 4 Passages into System Prompt
 ```
 
----
+### Comparative Metric Breakdown (`RAGAS Framework`)
 
-### Comparison: Recall Failure vs. Precision Failure
-
-| Metric & Analogy | What It Checks (`RAGAS Score`) | When It Fails (`Score < 0.70`) | Root Cause & Debugging Action |
-| :--- | :--- | :--- | :--- |
-| **Context Recall**<br>*(Did the net catch the golden fish?)* | Did our first-stage search (`top_k = 15`) successfully pull all 3 golden answer chunks out of the entire database? | **Retrieval Miss!**<br>The info **existed in the PDF**, but our net pulled up 15 random chunks and left all 3 golden fish behind in the lake. | **First-Stage Engine Failure:**<br>Your embedding model (`BGE-Large`) or BM25 keywords missed the connection. *Fix by adjusting `chunk_size`, tuning BM25 $k_1$, or adding query transformations (Multi-Query / HyDE).* |
-| **Context Precision**<br>*(Are the golden fish at the top of the bucket?)* | Did our second-stage re-ranker sort the 15 candidate chunks so the 3 golden fish sit right at the top (`#1, #2, #3`)? | **Re-Ranker Failure!**<br>The 3 golden fish **were indeed inside our bucket of 15** (`Recall = 100%`), but the re-ranker graded poorly and left them down at **`#12, #13, #14`** while sending `#1, #2, #3, #4` noise to the LLM! | **Second-Stage Engine Failure:**<br>Your cross-encoder (`BGE-Reranker-v2`) or threshold (`0.25`) misjudged relevance. *Fix by switching cross-encoder models (`Cohere Rerank v3.5`), increasing `top_n`, or tuning the relevance score cut-off.* |
+| Evaluation Metric | Architectural Stage Tested | Score Target & Definition | Root Cause of Low Scores (`Score < 0.70`) | Actionable Engineering Remedies |
+| :--- | :--- | :--- | :--- | :--- |
+| **Context Recall** | **Stage 1: Candidate Retrieval** (`top_k = 15`) | **Target: $> 0.70$**<br>Measures whether all ground-truth evidence necessary to answer the prompt was successfully retrieved from the global index into the candidate pool. | **Retrieval Miss:**<br>The required information **exists in the vector database**, but the embedding model or BM25 index failed to surface it within the top $K$ candidate passages. | 1. Implement Query Transformations (`Multi-Query`, `HyDE`).<br>2. Calibrate chunking boundaries (`chunk_size = 512`, `overlap = 64`).<br>3. Adjust BM25 hyperparameters ($k_1$, $b$) or increase candidate depth (`top_k = 25`). |
+| **Context Precision** | **Stage 2: Cross-Encoder Re-Ranking** (`top_n = 4`) | **Target: $> 0.75$**<br>Measures whether true ground-truth passages within the retrieved candidate pool are ranked above irrelevant noise passages. | **Re-Ranker Misclassification:**<br>The ground-truth passages **were successfully retrieved into the Top 15** (`Recall = 100%`), but the Cross-Encoder scored them poorly, pushing them down to positions `#12, #13, #14` while passing noise (`#1-#4`) to the LLM. | 1. Upgrade the Cross-Encoder model (`BAAI/bge-reranker-v2-m3` or `Cohere Rerank v3.5`).<br>2. Increase LLM context allowance (`top_n = 6`).<br>3. Fine-tune the re-ranker on domain-specific `(query, passage)` pairs. |
 
 ---
 
-## 6. Rapid-Fire Interview Questions & High-Signal Answers
+## 6. Core Architecture Q&A Reference
 
-#### Q1: Why do we use two stages (`Search Top 15` $\rightarrow$ `Re-Rank Top 4`) instead of just running the Cross-Encoder Re-Ranker on all 100,000 chunks directly?
-> **Answer:** **Computational Complexity.**  
-> Dense/Sparse embeddings are **Bi-Encoders**: you embed document chunks *once* offline ($O(1)$ at search time using HNSW graph indices).  
-> Cross-Encoders are **Re-Rankers**: they process `(Query + Chunk)` together through all attention layers of a Transformer ($O(N)$ real-time compute). Running a cross-encoder on 100,000 chunks takes minutes and gigabytes of VRAM. We use fast HNSW bi-encoders to narrow 100,000 down to `15` (`Stage 1`), then use the heavy cross-encoder to precisely sort those `15` down to `4` (`Stage 2`).
+#### Q1: Why use a two-stage retrieval pipeline (`Bi-Encoder Top-15` $\rightarrow$ `Cross-Encoder Top-4`) rather than scoring all database chunks with a Cross-Encoder directly?
+> **Engineering Rationale:** **Computational Complexity and Latency.**  
+> * **Bi-Encoders (`Embeddings`)** project queries and documents independently into vector space ($O(1)$ real-time similarity via pre-computed HNSW graph indexes).  
+> * **Cross-Encoders (`Re-Rankers`)** process the concatenated sequence `[CLS] Query [SEP] Document [SEP]` through every self-attention layer of a Transformer network simultaneously ($O(N)$ real-time compute per candidate).  
+> Running a full Cross-Encoder across 100,000 documents at query time introduces prohibitive latency (minutes) and massive compute costs. The industry standard is filtering 100,000 down to `15` candidate chunks using fast Bi-Encoder/BM25 indexes (`Stage 1`), then utilizing the high-precision Cross-Encoder to evaluate and sort only those `15` candidates (`Stage 2`).
 
-#### Q2: What is the most common silent failure mode in RAG systems?
-> **Answer:** **Chunking Strategy.**  
-> If chunks are too small (`< 128 tokens`), they lose surrounding context (*"He signed the contract"* — who is 'he'?). If chunks are too large (`> 2048 tokens`), retrieval becomes noisy and the LLM suffers from the **"Lost in the Middle"** phenomenon where it ignores facts buried in the center of long context windows.
+#### Q2: What is the impact of chunk size on RAG performance, and how do you mitigate boundary issues?
+> **Engineering Rationale:**  
+> * **Sub-optimal Chunk Size (`< 128 tokens`)**: Introduces context fragmentation. Passages lose anaphora resolution and surrounding context (`e.g., "The agreement was signed on Tuesday"` — who signed what?).  
+> * **Excessive Chunk Size (`> 2,048 tokens`)**: Introduces semantic noise during embedding (vectors become diluted averages across multiple topics) and triggers the **"Lost in the Middle"** LLM decoding failure mode, where attention heads degrade on facts buried midway through long context windows.  
+> * **Mitigation**: Deploy **Recursive Character Splitting** at `512` tokens with `10-25% overlap` (`64 tokens`) to maintain semantic continuity across chunk boundaries, or implement **Semantic Chunking** (`splitting at cosine distance inflection points between consecutive sentences`).
 
-#### Q3: How do you prevent an LLM from hallucinating answers when the PDF doesn't contain the information?
-> **Answer:** **Prompt Engineering $+$ Abstention Thresholds.**  
-> 1. We wrap retrieved text in `<context>` XML tags and explicitly instruct the LLM: *"If the provided context does not contain sufficient information to answer truthfully, respond exactly: 'The provided documents do not contain information about this topic.' Do NOT guess or use prior knowledge."*  
-> 2. We enforce a **Re-Ranker Score Cut-Off (`score_threshold = 0.25`)**. If even the #1 retrieved chunk scores below 0.25, our backend intercepts the request and returns the abstention message *before* calling the LLM, saving token budget!
+#### Q3: How do you enforce strict anti-hallucination guarantees when user queries fall outside the document corpus?
+> **Engineering Rationale:** **Dual-Layer Guardrails (Re-Ranker Thresholding $+$ Prompt Constraints).**  
+> 1. **Early Interception (`Cross-Encoder Thresholding`)**: We configure a minimum relevance threshold (`rerank_score_threshold = 0.25`). If the highest-scoring candidate passage after Cross-Encoder re-ranking falls below `0.25`, the application intercepts the workflow and returns: *"The provided documents do not contain information about this topic,"* **completely bypassing the LLM API call** (saving token budget and eliminating generation risk).  
+> 2. **Context-Bounded Prompting**: Passages are injected inside strict XML tags (`<context><chunk id="1">...</chunk></context>`). The system prompt mandates: *"Answer exclusively using facts entailed directly by the provided `<context>`. If the context is insufficient, state explicitly that the documents lack the information. Do NOT extrapolate or assume."* Every assertion must include `[Source: doc_id, p. X]`.
 
-#### Q4: What is RAGAS and how does it prevent regressions in CI/CD?
-> **Answer:** **Retrieval-Augmented Generation Assessment (RAGAS)** is an evaluation harness that calculates four independent mathematical metrics over a curated **Golden Dataset** of ground-truth `(question, answer, context)` triples:
-> * **Faithfulness (`> 0.85`):** Checks if every claim generated by the LLM is directly entailed by the retrieved chunks.
-> * **Answer Relevancy (`> 0.80`):** Checks if the answer directly addresses the prompt without being evasive.
-> * **Context Precision (`> 0.75`):** Checks if true answer chunks were ranked at the top (`#1-#4`).
-> * **Context Recall (`> 0.70`):** Checks if true answer chunks were successfully retrieved (`#1-#15`).  
-> We wire this harness into GitHub Actions pre-merge gates (`python -m invariable_docs.eval.regression_runner`). If an engineer changes a prompt or chunk size and any metric drops below threshold, the pull request is blocked.
+#### Q4: How is RAG evaluation automated within CI/CD pipelines to prevent quality regressions?
+> **Engineering Rationale:**  
+> We maintain a versioned **Golden Dataset** (`35-50 ground-truth triples of question, ideal_answer, and verified_context_passages`) in the repository. We integrate the **RAGAS Evaluation Harness** into pre-merge GitHub Actions workflows (`invariable_docs.eval.regression_runner`).  
+> On any pull request modifying chunk parameters, embedding providers, or system prompts, the CI runner executes the golden suite and calculates **Faithfulness (`>0.85`)**, **Answer Relevancy (`>0.80`)**, **Context Precision (`>0.75`)**, and **Context Recall (`>0.70`)**. If any metric regresses below the configured gate thresholds, the pull request merge is programmatically blocked.
