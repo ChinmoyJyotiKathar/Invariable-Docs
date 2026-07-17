@@ -14,6 +14,8 @@ from invariable_docs.providers.base import (
     ChunkMetadata,
     RetrievedChunk,
 )
+from invariable_docs.providers.embeddings.local_bge_provider import LocalBGEProvider
+from invariable_docs.providers.vector_stores.qdrant_provider import QdrantProvider
 
 __all__ = [
     "BaseLLMProvider",
@@ -23,4 +25,6 @@ __all__ = [
     "BaseObservabilityProvider",
     "ChunkMetadata",
     "RetrievedChunk",
+    "LocalBGEProvider",
+    "QdrantProvider",
 ]

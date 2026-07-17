@@ -64,7 +64,3 @@ eval_results/*
 .pytest_cache/
 .coverage
 htmlcov/
-
-# random files
-INTERVIEW_REVISION_GUIDE.md
-.INTERVIEW_REVISION_GUIDE.md
