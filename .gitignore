@@ -64,3 +64,6 @@ eval_results/*
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local task tracking
+TODO.md
