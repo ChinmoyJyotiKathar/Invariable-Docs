@@ -65,6 +65,5 @@ eval_results/*
 .coverage
 htmlcov/
 
-# random files
-INTERVIEW_REVISION_GUIDE.md
-.INTERVIEW_REVISION_GUIDE.md
+# Local task tracking
+TODO.md

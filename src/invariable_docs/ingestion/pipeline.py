@@ -32,12 +32,15 @@ class IngestionPipeline:
         vector_store_provider: BaseVectorStoreProvider,
         chunker: Optional[BaseChunker] = None,
         extract_tables: bool = True,
+        collection_name: str = "invariable_docs",
     ):
         self.embedding_provider = embedding_provider
         self.vector_store_provider = vector_store_provider
         self.parser = DocumentParser(extract_tables=extract_tables)
         self.cleaner = DocumentCleaner()
         self.chunker = chunker or RecursiveCharacterChunker()
+        self.collection_name = collection_name
+        self.vector_store_provider.ensure_collection(self.collection_name, self.embedding_provider.dimension)
 
     def ingest_file(
         self,
@@ -88,7 +91,7 @@ class IngestionPipeline:
             embeddings = self.embedding_provider.embed_batch(batch_texts, input_type="document")
 
             logger.info(f"Upserting batch {i // batch_size + 1} into {self.vector_store_provider.__class__.__name__}...")
-            self.vector_store_provider.upsert_chunks(batch, embeddings)
+            self.vector_store_provider.upsert_chunks(self.collection_name, batch, embeddings)
             total_indexed += len(batch)
 
         logger.info(f"Successfully ingested and indexed {total_indexed} chunks from document '{canonical_id}'.")
