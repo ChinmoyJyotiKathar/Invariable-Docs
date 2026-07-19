@@ -1,7 +1,7 @@
 # 🏛️ Invariable Docs
 ### Enterprise-Grade Hybrid-Search RAG Knowledge Assistant
 
-**Invariable Docs** (formerly GroundedDocs from the AI Engineering Portfolio PRD) is a high-precision document Q&A system engineered with a strict **Plug-and-Play Provider Architecture**. 
+**Invariable Docs** is a high-precision document Q&A system engineered with a strict **Plug-and-Play Provider Architecture**. 
 
 Version 1 runs **100% locally with zero API cost** on Apple Silicon (`MacBook Air M5 16GB RAM`), combining dense semantic embeddings with BM25 sparse keyword retrieval (`Reciprocal Rank Fusion`), second-stage cross-encoder re-ranking, cited response generation (`[Source: doc_id, p. X]`), and a built-in **RAGAS Evaluation Harness** wired directly into CI/CD.
 
