@@ -18,6 +18,7 @@ from invariable_docs.providers.embeddings.local_bge_provider import LocalBGEProv
 from invariable_docs.providers.vector_stores.qdrant_provider import QdrantProvider
 from invariable_docs.providers.llm.ollama_provider import OllamaLLMProvider
 from invariable_docs.providers.rerankers.local_bge_reranker import LocalRerankerProvider
+from invariable_docs.providers.factory import ProviderFactory
 
 __all__ = [
     "BaseLLMProvider",
@@ -31,4 +32,5 @@ __all__ = [
     "QdrantProvider",
     "OllamaLLMProvider",
     "LocalRerankerProvider",
+    "ProviderFactory",
 ]
