@@ -16,6 +16,7 @@ from invariable_docs.providers.base import (
 )
 from invariable_docs.providers.llm.ollama_provider import OllamaLLMProvider
 from invariable_docs.providers.rerankers.local_bge_reranker import LocalRerankerProvider
+from invariable_docs.providers.factory import ProviderFactory
 
 __all__ = [
     "BaseLLMProvider",
@@ -27,4 +28,5 @@ __all__ = [
     "RetrievedChunk",
     "OllamaLLMProvider",
     "LocalRerankerProvider",
+    "ProviderFactory",
 ]
