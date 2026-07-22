@@ -62,7 +62,8 @@ class LocalBGEProvider(BaseEmbeddingProvider):
         try:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(self.model_name, device=self.device)
-            self._dim = self.model.get_sentence_embedding_dimension()
+            # Use get_embedding_dimension to avoid FutureWarning
+            self._dim = self.model.get_embedding_dimension()
             logger.info(f"Successfully initialized BGE model '{self.model_name}' (dim: {self._dim}, device: {self.device}).")
         except Exception as e:
             logger.error(f"Failed to load embedding model '{self.model_name}': {e}", exc_info=True)
