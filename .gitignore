@@ -67,3 +67,7 @@ htmlcov/
 
 # Local task tracking
 TODO.md
+task.md
+
+# Large internal assets
+assets/AI_Engineering_Portfolio_PRDs.docx
