@@ -1,0 +1,59 @@
+[
+  {
+    "question": "What is the primary LLM provider used in this architecture?",
+    "ground_truth_answer": "The primary local LLM provider used in this architecture is Ollama.",
+    "ground_truth_contexts": [
+      "We rely on Ollama as the primary LLM provider for local inference.",
+      "The system is designed to use Ollama running locally for generation."
+    ],
+    "metadata": {
+      "difficulty": "easy",
+      "type": "factual"
+    }
+  },
+  {
+    "question": "How does the ingestion pipeline handle chunking?",
+    "ground_truth_answer": "The ingestion pipeline uses a dual chunking engine featuring a default RecursiveCharacterChunker and an advanced SemanticChunker.",
+    "ground_truth_contexts": [
+      "The ingestion pipeline employs a dual chunking engine.",
+      "By default it uses the RecursiveCharacterChunker, but can also use a SemanticChunker based on sentence cosine similarity."
+    ],
+    "metadata": {
+      "difficulty": "medium",
+      "type": "architectural"
+    }
+  },
+  {
+    "question": "What algorithm is used to merge Dense and Sparse search results?",
+    "ground_truth_answer": "Reciprocal Rank Fusion (RRF) is used to merge the results from Dense and Sparse searches.",
+    "ground_truth_contexts": [
+      "The Hybrid Retrieval Engine orchestrates simultaneous Dense (Vector) and Sparse (BM25) searches.",
+      "It merges the results using Reciprocal Rank Fusion (RRF)."
+    ],
+    "metadata": {
+      "difficulty": "medium",
+      "type": "factual"
+    }
+  },
+  {
+    "question": "What is the capital of France?",
+    "ground_truth_answer": "The provided documents do not contain information about this topic.",
+    "ground_truth_contexts": [],
+    "metadata": {
+      "difficulty": "adversarial",
+      "type": "abstention_test"
+    }
+  },
+  {
+    "question": "Which cross-encoder model is used for re-ranking?",
+    "ground_truth_answer": "The cross-encoder model used for re-ranking is BAAI/bge-reranker-v2-m3.",
+    "ground_truth_contexts": [
+      "We integrate a second-stage Cross-Encoder re-ranking.",
+      "The local reranker provider uses the BAAI/bge-reranker-v2-m3 model accelerated via MPS."
+    ],
+    "metadata": {
+      "difficulty": "easy",
+      "type": "factual"
+    }
+  }
+]
