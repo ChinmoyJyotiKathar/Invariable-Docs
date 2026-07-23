@@ -135,16 +135,16 @@ class QdrantProvider(BaseVectorStoreProvider):
         """
         query_filter = self._build_filter(metadata_filters) if metadata_filters else None
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=query_filter,
             with_payload=True,
         )
 
         retrieved: List[RetrievedChunk] = []
-        for hit in results:
+        for hit in results.points:
             payload = hit.payload or {}
             meta = ChunkMetadata(
                 doc_id=payload.get("doc_id", "unknown"),

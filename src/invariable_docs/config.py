@@ -9,7 +9,10 @@ from functools import lru_cache
 from typing import Literal, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
+# Inject .env into os.environ so third-party libraries (like litellm) can find API keys automatically
+load_dotenv()
 
 class Settings(BaseSettings):
     """System-wide settings managed via environment variables."""
@@ -47,6 +50,8 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = Field(default="llama3.1:8b-instruct-q4_K_M", description="Local LLM model name.")
     OLLAMA_TEMPERATURE: float = Field(default=0.1, description="LLM generation temperature.")
     OLLAMA_TOP_P: float = Field(default=0.90, description="Nucleus sampling threshold.")
+    
+    LLM_MODEL_NAME: str = Field(default="groq/llama-3.3-70b-versatile", description="LiteLLM provider model string.")
 
     LOCAL_EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-en-v1.5", description="Local BGE model repo.")
     LOCAL_EMBEDDING_DIMENSION: int = Field(default=1024, description="Embedding vector dimension.")
