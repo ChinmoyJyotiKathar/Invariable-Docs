@@ -36,6 +36,11 @@ class ProviderFactory:
                 model_name=settings.OLLAMA_MODEL,
                 host=settings.OLLAMA_BASE_URL,
             )
+        elif settings.LLM_PROVIDER == "litellm":
+            from invariable_docs.providers.llm.litellm_provider import LiteLLMProvider
+            return LiteLLMProvider(
+                model_name=settings.LLM_MODEL_NAME,
+            )
         else:
             raise NotImplementedError(f"LLM provider '{settings.LLM_PROVIDER}' is not yet implemented.")
 
